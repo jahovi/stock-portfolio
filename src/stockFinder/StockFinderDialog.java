@@ -1,0 +1,180 @@
+package stockFinder;
+
+import java.awt.GridLayout;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+
+import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+
+import main.MainFrame;
+import main.Stock;
+import preferences.ApplicationPreferencesModel;
+
+/**
+ * This class represents a visual interface to the user to find stocks by entering search terms.
+ * Instances present a text field and show search results as a list in a scroll panel.
+ * Users can pick stocks from the results and add those to the watch list or open charts.
+ */
+public class StockFinderDialog extends JDialog implements ActionListener {
+    private final String SEARCH_BUTTON_LABEL = "Search";
+    private final String ADD_TO_WATCHLIST_BUTTON_LABEL = "Add to Watchlist";
+    private final String OPEN_CHART_BUTTON_LABEL = "Open Chart";
+    private final String CLOSE_BUTTON_LABEL = "Close";
+
+    /** The search button action command. Listeners need to know this to decide which button was clicked.*/
+    public final String SEARCH_BUTTON_COMMAND = "StockFinderDialog.Search";
+    
+    /** The add to watchlist button action command. Listeners need to know this to decide which button was clicked.*/
+    public final String ADD_TO_WATCHLIST_BUTTON_COMMAND = "StockFinderDialog.AddToWatchlist";
+    
+    /** The open chart button action command. Listeners need to know this to decide which button was clicked.*/
+    public final String OPEN_CHART_BUTTON_COMMAND = "StockFinderDialog.OpenChart";
+    
+    /** The close button action command. Listeners need to know this to decide which button was clicked.*/
+    public final String CLOSE_BUTTON_COMMAND = "StockFinderDialog.Close";
+
+    private DefaultListModel<String> listModel;
+    private StockFinder stockFinder;
+    private JTextField searchField;
+    private JButton addToWatchlistButton;
+    private JButton openChartButton;
+    private JButton closeButton;
+    private JList<String> list;
+    private ArrayList<Stock> stockList;
+
+    /**
+     * Constructs a stock finder dialog.
+     *
+     * @param mainFrame the main frame this dialog is to be associated with
+     * @param preferences the ApplicationPreferencesModel instance that provides configuration data
+     */
+    public StockFinderDialog(MainFrame mainFrame, ApplicationPreferencesModel preferences) {
+        super(mainFrame, "Stock Finder", true);
+        setLocationRelativeTo(mainFrame);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        setLayout(new GridLayout(3, 0));
+
+        stockFinder = new StockFinder(preferences);
+        Border padding = BorderFactory.createEmptyBorder(20, 10, 20, 10);
+
+        // create search panel
+        JPanel searchPanel = new JPanel(new GridLayout(0, 2));
+        searchField = new JTextField(30);
+        searchField.setActionCommand(SEARCH_BUTTON_COMMAND);
+        searchField.addActionListener(this);
+        
+        JButton searchButton = new JButton(SEARCH_BUTTON_LABEL);
+        searchButton.setActionCommand(SEARCH_BUTTON_COMMAND);
+        searchButton.addActionListener(this);
+        searchPanel.add(searchField);
+        searchPanel.add(searchButton);
+        searchPanel.setBorder(padding);
+        add(searchPanel);
+
+        // add list panel
+        listModel = new DefaultListModel<>();
+        list = new JList<>(listModel);
+        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.addListSelectionListener(new ListSelectionListener() {
+
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (list.getSelectedIndex() == -1) {
+                    addToWatchlistButton.setEnabled(false);
+                    openChartButton.setEnabled(false);
+                } else {
+                    addToWatchlistButton.setEnabled(true);
+                    openChartButton.setEnabled(true);
+                }
+            }
+        });
+        JScrollPane listScrollPane = new JScrollPane(list);
+        add(listScrollPane);
+
+        // add button panel
+        JPanel buttonPanel = new JPanel(new GridLayout(0, 3));
+        addToWatchlistButton = new JButton(ADD_TO_WATCHLIST_BUTTON_LABEL);
+        openChartButton = new JButton(OPEN_CHART_BUTTON_LABEL);
+        closeButton = new JButton(CLOSE_BUTTON_LABEL);
+        addToWatchlistButton.setActionCommand(ADD_TO_WATCHLIST_BUTTON_COMMAND);
+        openChartButton.setActionCommand(OPEN_CHART_BUTTON_COMMAND);
+        closeButton.setActionCommand(CLOSE_BUTTON_COMMAND);
+
+        addToWatchlistButton.setEnabled(false);
+        openChartButton.setEnabled(false);
+
+        closeButton.addActionListener(this);
+        buttonPanel.add(addToWatchlistButton);
+        buttonPanel.add(openChartButton);
+        buttonPanel.add(closeButton);
+        buttonPanel.setBorder(padding);
+        add(buttonPanel);
+
+        pack();
+    }
+
+    /**
+     * Handles events generated by the user clicking on the "Search" and "Close" buttons. 
+     * The former triggers a new query of the data provider with the text in the text field.
+     * The latter closes the window.
+     *
+     */
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (e.getActionCommand().equals(SEARCH_BUTTON_COMMAND)) {
+            search();
+        } else if (e.getActionCommand().equals(CLOSE_BUTTON_COMMAND)) {
+            dispose();
+        }
+    }
+
+    private void search() {
+        // Hands the search term in the text box to the stock finder for look up with the data provider
+        listModel.clear();
+        stockList = new ArrayList<>(Arrays.asList(stockFinder.findMatchingStocks(searchField.getText())));
+        for (Stock stock : stockList) {
+            listModel.addElement(stock.getDescription() + " " + "(" + stock.getDisplaySymbol() + ")");
+        }
+        list.setSelectedIndex(0);
+    }
+
+    /**
+     * Gets a reference to the "Add to Watchlist" button. Used in main to register
+     * the main controller as action listener.
+     *
+     * @return a reference to the "Add to Watchlist" button
+     */
+    public JButton getAddToWatchlistButton() {
+        return addToWatchlistButton;
+    }
+
+    /**
+     * Gets a reference to the "Open Chart" button. Used in main to register
+     * the main controller as action listener.
+     * 
+     * @return a reference to the "Open Chart" button
+     */
+    public JButton getOpenChartButton() {
+        return openChartButton;
+    }
+
+    /**
+     * Gets the selected stock in the results list. Used in the main controller to add
+     * that stock to the watchlist or open the corresponding chart.
+     *
+     * @return the stock selected in the results list
+     */
+    public Stock getSelectedStock() {
+        Stock selectedStock = null;
+        int selectedListIndex = list.getSelectedIndex();
+        if (selectedListIndex != -1) {
+            selectedStock = stockList.get(selectedListIndex);
+        }
+        return selectedStock;
+    }
+
+}
